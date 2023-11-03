@@ -3,7 +3,7 @@ import os
 import logging
 import colorama
 from colorama import Fore, Style
-from . import client  # Importing client from a module named "client"
+from paramspider import client  # Importing client from a module named "client"
 from urllib.parse import urlparse, parse_qs, urlencode
 import os
 
@@ -78,6 +78,45 @@ def clean_urls(urls, extensions, placeholder):
             cleaned_urls.add(cleaned_url)
     return list(cleaned_urls)
 
+
+def clean_urls_and_print(urls, extensions, placeholder):
+    """
+    Clean a list of URLs by removing unnecessary parameters and query strings.
+
+    Args:
+        urls (list): List of URLs to clean.
+        extensions (list): List of file extensions to check against.
+
+    Returns:
+        list: List of cleaned URLs.
+    """
+    cleaned_urls = set()
+    for url in urls:
+        cleaned_url = clean_url(url)
+        if not has_extension(cleaned_url, extensions):
+            parsed_url = urlparse(cleaned_url)
+            query_params = parse_qs(parsed_url.query)
+            cleaned_params = {key: placeholder for key in query_params}
+            cleaned_query = urlencode(cleaned_params, doseq=True)
+            cleaned_url = parsed_url._replace(query=cleaned_query).geturl()
+            cleaned_urls.add(cleaned_url)
+            print(cleaned_url)
+    return list(cleaned_urls)
+
+
+def only_params_print(urls, extensions, placeholder):
+    params =[]
+    for url in urls:
+        cleaned_url = clean_url(url)
+        if not has_extension(cleaned_url, extensions):
+            parsed_url = urlparse(cleaned_url)
+            query_params = parse_qs(parsed_url.query)
+            [params.append(key) for key in query_params]
+    params = sorted(set(params))
+    [print(key) for key in params]
+    return list(params)
+
+
 def fetch_and_clean_urls(domain, extensions, stream_output,proxy, placeholder):
     """
     Fetch and clean URLs related to a specific domain from the Wayback Machine.
@@ -117,6 +156,7 @@ def fetch_and_clean_urls(domain, extensions, stream_output,proxy, placeholder):
     
     logging.info(f"{Fore.YELLOW}[INFO]{Style.RESET_ALL} Saved cleaned URLs to {Fore.CYAN + result_file + Style.RESET_ALL}")
 
+
 def main():
     """
     Main function to handle command-line arguments and start URL mining process.
@@ -134,6 +174,8 @@ def main():
     colored_log_text = f"{yellow_color_code}{log_text}{reset_color_code}"
     print(colored_log_text)
     parser = argparse.ArgumentParser(description="Mining URLs from dark corners of Web Archives ")
+    parser.add_argument("-f", "--file", help="Get params from urls file.")
+    parser.add_argument("-fp", "--file_params", help="Get only params from urls file.")
     parser.add_argument("-d", "--domain", help="Domain name to fetch related URLs for.")
     parser.add_argument("-l", "--list", help="File containing a list of domain names.")
     parser.add_argument("-s", "--stream", action="store_true", help="Stream URLs on the terminal.")
@@ -141,8 +183,8 @@ def main():
     parser.add_argument("-p", "--placeholder", help="placeholder for parameter values", default="FUZZ")
     args = parser.parse_args()
 
-    if not args.domain and not args.list:
-        parser.error("Please provide either the -d option or the -l option.")
+    if not args.domain and not args.list and not args.file and not args.file_params:
+        parser.error("Please provide either the -d option or the -l option or -f option or -fp option.")
 
     if args.domain and args.list:
         parser.error("Please provide either the -d option or the -l option, not both.")
@@ -156,6 +198,16 @@ def main():
         domain = args.domain
 
     extensions = HARDCODED_EXTENSIONS
+
+    if args.file:
+        with open(args.file, "r") as f:
+            urls = [line.strip().lower() for line in f.readlines()]
+        clean_urls_and_print(urls, extensions, args.placeholder)
+
+    if args.file_params:
+        with open(args.file_params, "r") as f:
+            urls = [line.strip().lower() for line in f.readlines()]
+        only_params_print(urls, extensions, args.placeholder)
 
     if args.domain:
         fetch_and_clean_urls(domain, extensions, args.stream, args.proxy, args.placeholder)
